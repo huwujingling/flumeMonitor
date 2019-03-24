@@ -12,8 +12,11 @@ import java.io.FileReader;
 import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ServiceNodeUpAndDown {
+    Gson gson =new Gson();
+    FlumeMetricsMonitor flumeMetricsMonitor =new FlumeMetricsMonitor();
     static ZkClient zk;
     static String parentNode;
     int first = 1;
@@ -21,11 +24,14 @@ public class ServiceNodeUpAndDown {
     static MailManager mailManager;
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     String Recipient;//收件人.
-    Gson gson = new Gson();
     Map<String, String> eventMap = new HashMap<String, String>();
     String currentHost;//主机
     String confName;//配置文件名
     String receiver;//收件人
+    String moduleAlias;//组件别名
+    String monitorPort;//监控端口
+    double monitorTime;
+    Map<String,Map> monitorMap;
 
     //初始化邮件服务器信息
     static {
@@ -59,6 +65,9 @@ public class ServiceNodeUpAndDown {
      * * 监听服务器的 动态上下线通知，并且通过邮件告知信息   
      */
     public void listenerForServerNodes() throws UnsupportedEncodingException, MessagingException {
+        System.out.println("listenerForServerNodes()方法调用了");
+        monitorMap = new ConcurrentHashMap<>();
+
         List<String> children = zk.getChildren(parentNode); //返回子节点的名称
 
         if (children == null || children.size() == 0) { //如果子parentNode 下面没有 服务器节点注册，则发送邮件通知没有
@@ -76,11 +85,21 @@ public class ServiceNodeUpAndDown {
                 //获取zk中存储的数据
                 String zkData = zk.readData(nodePath).toString();
                 JsonObject returnData = new JsonParser().parse(zkData).getAsJsonObject();
-                eventMap = gson.fromJson(returnData, Map.class);
+                eventMap = gson.fromJson(returnData, ConcurrentHashMap.class);
+                System.out.println(eventMap.toString());
 
                 receiver = eventMap.get("receiver");
                 currentHost = eventMap.get("currentHost");
                 confName = eventMap.get("confName");
+                moduleAlias=eventMap.get("moduleAlias");
+                monitorPort=eventMap.get("monitorPort");
+
+                //存放到监控metrics用于获取数据的map
+                monitorMap.put(eventMap.get("confName"),eventMap);
+                //存放到用于判断网络是否断开的节点
+
+
+
 
                 mailManager.setToReceiverAry(receiver.split(";"));
 
@@ -111,6 +130,35 @@ public class ServiceNodeUpAndDown {
             first += 1;
             isDown(children);
         }
+
+
+        //进行metrics监控
+        while(!Thread.currentThread().isInterrupted()){
+            //flume下线会重新此方法，可能会为空
+            if(monitorMap == null || monitorMap.isEmpty())
+                break;
+            try {
+                for (String conf : monitorMap.keySet()) {
+                    int monitorMapSize = monitorMap.size();
+                    System.out.println("http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics");
+
+                    //循环过程中会移除网络异常的flume
+                    if(monitorMap == null || monitorMap.isEmpty())
+
+                        break;
+                    flumeMetricsMonitor.metricsMonitor(zk,parentNode,monitorMap,conf,"r1","c1","k1");
+
+                    if (monitorMap.size() != monitorMapSize)
+                        Thread.sleep(60000);
+                }
+
+               Thread.sleep(10000);//完成一周期的监控休眠10s
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println("当前没有监控");
     }
 
     /**
@@ -156,7 +204,7 @@ public class ServiceNodeUpAndDown {
         }
     }
 
-    private void serverNodeListener() throws UnsupportedEncodingException, MessagingException {
+    private void serverNodeListener() throws Exception {
         zk.subscribeChildChanges(parentNode, new IZkChildListener() {
             @Override
             public void handleChildChange(String s, List<String> list) throws Exception {
@@ -171,7 +219,7 @@ public class ServiceNodeUpAndDown {
         sud.serverNodeListener();
 
         synchronized (sud) {
-            sud.wait(); //wait 等待 让出竞争锁    
+            sud.wait(); //wait 等待 让出竞争锁
         }
     }
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" serverName="https://github.com/huwujingling/flumeMonitor.git" uploadOnCheckin="aa4c384a-9b11-4367-a455-8b5db06a8d02">
+    <serverData>
+      <paths name="https://github.com/huwujingling/flumeMonitor.git">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myUploadOnCheckinName" value="https://github.com/huwujingling/flumeMonitor.git" />
+  </component>
+</project>

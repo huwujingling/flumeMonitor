@@ -47,7 +47,7 @@ public class FlumeMetricsMonitor {
                 monitorMap.remove(conf);
                 zk.delete(parentNode+"/"+conf);
                 System.out.println(conf+"節點被刪除");
-                Thread.currentThread().notify();
+                Thread.sleep(60000);
                 return;
             }
 
