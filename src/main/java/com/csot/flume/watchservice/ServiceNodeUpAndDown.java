@@ -9,6 +9,7 @@ import org.I0Itec.zkclient.ZkClient;
 import javax.mail.*;
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -16,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ServiceNodeUpAndDown {
     Gson gson =new Gson();
-    FlumeMetricsMonitor flumeMetricsMonitor =new FlumeMetricsMonitor();
+    static FlumeMetricsMonitor flumeMetricsMonitor =new FlumeMetricsMonitor();
     static ZkClient zk;
     static String parentNode;
     int first = 1;
@@ -24,14 +25,14 @@ public class ServiceNodeUpAndDown {
     static MailManager mailManager;
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     String Recipient;//收件人.
-    Map<String, String> eventMap = new HashMap<String, String>();
+    static Map<String, String> eventMap = new ConcurrentHashMap<String, String>();
     String currentHost;//主机
     String confName;//配置文件名
     String receiver;//收件人
     String moduleAlias;//组件别名
     String monitorPort;//监控端口
     double monitorTime;
-    Map<String,Map> monitorMap;
+    static Map<String,Map> monitorMap = new ConcurrentHashMap<>();
 
     //初始化邮件服务器信息
     static {
@@ -64,11 +65,11 @@ public class ServiceNodeUpAndDown {
     /**
      * * 监听服务器的 动态上下线通知，并且通过邮件告知信息   
      */
-    public void listenerForServerNodes() throws UnsupportedEncodingException, MessagingException {
+    public void listenerForServerNodes(List<String> children) throws UnsupportedEncodingException, MessagingException {
+        //System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
         System.out.println("listenerForServerNodes()方法调用了");
-        monitorMap = new ConcurrentHashMap<>();
 
-        List<String> children = zk.getChildren(parentNode); //返回子节点的名称
+       // children = zk.getChildren(parentNode); //返回子节点的名称
 
         if (children == null || children.size() == 0) { //如果子parentNode 下面没有 服务器节点注册，则发送邮件通知没有
             isDown(children);
@@ -132,7 +133,7 @@ public class ServiceNodeUpAndDown {
         }
 
 
-        //进行metrics监控
+      /*  //进行metrics监控
         while(!Thread.currentThread().isInterrupted()){
             //flume下线会重新此方法，可能会为空
             if(monitorMap == null || monitorMap.isEmpty())
@@ -142,23 +143,21 @@ public class ServiceNodeUpAndDown {
                     int monitorMapSize = monitorMap.size();
                     System.out.println("http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics");
 
+                    System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
+
                     //循环过程中会移除网络异常的flume
                     if(monitorMap == null || monitorMap.isEmpty())
-
                         break;
-                    flumeMetricsMonitor.metricsMonitor(zk,parentNode,monitorMap,conf,"r1","c1","k1");
 
-                    if (monitorMap.size() != monitorMapSize)
-                        Thread.sleep(60000);
+                    flumeMetricsMonitor.metricsMonitor(zk,parentNode,monitorMap,conf,"r1","c1","k1");
                 }
 
                Thread.sleep(10000);//完成一周期的监控休眠10s
             } catch (Exception e) {
                 e.printStackTrace();
+                Thread.currentThread().interrupt();
             }
-        }
-
-        System.out.println("当前没有监控");
+        }*/
     }
 
     /**
@@ -208,18 +207,49 @@ public class ServiceNodeUpAndDown {
         zk.subscribeChildChanges(parentNode, new IZkChildListener() {
             @Override
             public void handleChildChange(String s, List<String> list) throws Exception {
-                listenerForServerNodes();
+                if ("main".equals(Thread.currentThread().getName()))
+                    Thread.currentThread().interrupted();
+                listenerForServerNodes(list);
             }
         });
-        listenerForServerNodes();
+        listenerForServerNodes(zk.getChildren(parentNode));
     }
 
     public static void main(String[] args) throws Exception {
         ServiceNodeUpAndDown sud = new ServiceNodeUpAndDown();
         sud.serverNodeListener();
+        flumeMetricsMonitor.run(zk,parentNode,monitorMap,"r1","c1","k1");
 
         synchronized (sud) {
             sud.wait(); //wait 等待 让出竞争锁
         }
+      /*  System.out.println("输出任意键结束程序");
+        new BufferedReader(new InputStreamReader(System.in)).readLine();*/
+
+       /* //进行metrics监控
+        while(!Thread.currentThread().isInterrupted()){
+            //flume下线会重新此方法，可能会为空
+            if(monitorMap == null || monitorMap.isEmpty())
+                break;
+            try {
+                for (String conf : monitorMap.keySet()) {
+                    int monitorMapSize = monitorMap.size();
+                    System.out.println("http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics");
+
+                    System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
+
+                    //循环过程中会移除网络异常的flume
+                    if(monitorMap == null || monitorMap.isEmpty())
+                        break;
+
+                    flumeMetricsMonitor.metricsMonitor(zk,parentNode,monitorMap,conf,"r1","c1","k1");
+                }
+
+                Thread.sleep(10000);//完成一周期的监控休眠10s
+            } catch (Exception e) {
+                e.printStackTrace();
+                Thread.currentThread().interrupt();
+            }
+        }*/
     }
 }

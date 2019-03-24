@@ -25,31 +25,63 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 //此类用于向flume发送http请求，获取metrics
-public class FlumeMetricsMonitor {
+public class FlumeMetricsMonitor extends Thread{
     private static CloseableHttpClient httpClient;
     static Gson gson = new Gson();
     private static  int monitorTime = 0 ;//监控次数
+
+    public void run(ZkClient zk,String parentNode, Map<String,Map> monitorMap, String source, String channel, String sink){
+         while(!Thread.currentThread().isInterrupted()){
+            //flume下线会重新此方法，可能会为空
+            if(monitorMap == null || monitorMap.isEmpty()){
+                System.out.println("");
+            }
+
+            System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
+
+            try {
+                for (String conf : monitorMap.keySet()) {
+                    int monitorMapSize = monitorMap.size();
+                    System.out.println("http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics");
+
+                    System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
+
+                    //循环过程中会移除网络异常的flume
+                    if(monitorMap == null || monitorMap.isEmpty())
+                        break;
+
+                    metricsMonitor(zk,parentNode,monitorMap,conf,"r1","c1","k1");
+                }
+
+                Thread.sleep(10000);//完成一周期的监控休眠10s
+            } catch (Exception e) {
+                e.printStackTrace();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
 
     public void metricsMonitor(ZkClient zk,String parentNode, Map<String,Map> monitorMap, String conf, String source, String channel, String sink) throws Exception {
         String url ="http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics";
 
         System.out.println("-------------------------开始第"+(monitorTime+1)+"次监控-------------------------");
-            // System.out.println(url);
+        // System.out.println(url);
         //使用get访问http获取metrics
         Map metricsMap = new ConcurrentHashMap<String,String>();
 
         //判断网络连接每2s重试一次，超过三次则抛异常
-            try{
-                String metrics = get(url);
-                JsonObject returnData = new JsonParser().parse(metrics).getAsJsonObject();
-                metricsMap = gson.fromJson(returnData, Map.class);
-            }catch (Exception excption){
-                monitorMap.remove(conf);
-                zk.delete(parentNode+"/"+conf);
-                System.out.println(conf+"節點被刪除");
-                Thread.sleep(60000);
-                return;
-            }
+        try{
+            String metrics = get(url);
+            JsonObject returnData = new JsonParser().parse(metrics).getAsJsonObject();
+            metricsMap = gson.fromJson(returnData, Map.class);
+        }catch (Exception excption){
+            monitorMap.remove(conf);
+            //zk.delete(parentNode+"/"+conf);
+            //Thread.sleep(60000);
+            //Thread.currentThread().interrupt();
+            System.out.println(conf+"節點被刪除");
+            return;
+        }
 
 
         System.out.println("网络连接正常");
