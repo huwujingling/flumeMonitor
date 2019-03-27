@@ -61,8 +61,9 @@ public class MailManager {
     }
 
 
-    public void setToReceiverAry(String[] toReceiverAry) {
+    public MailManager setToReceiverAry(String[] toReceiverAry) {
         this.toReceiverAry = toReceiverAry;
+        return this;
     }
 
     /**

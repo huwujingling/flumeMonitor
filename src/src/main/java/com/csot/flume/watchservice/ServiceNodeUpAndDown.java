@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.I0Itec.zkclient.IZkChildListener;
 import org.I0Itec.zkclient.ZkClient;
+import org.apache.commons.lang.ArrayUtils;
+
 import javax.mail.*;
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -29,32 +31,21 @@ public class ServiceNodeUpAndDown {
     String moduleAlias;//组件别名
     String monitorPort;//监控端口
     Map<String,Map> monitorMap = new ConcurrentHashMap<>();
+    static Properties properties;
 
     //初始化邮件服务器信息
     static {
-        Properties properties = new Properties();
+             properties = new Properties();
         // 使用InPutStream流读取properties文件
         try {
-            BufferedReader bufferedReader = new BufferedReader(new FileReader(new File("").getCanonicalPath().toString()+"/src/main/resources/conf/watchService.properties")));//watchservice.properties
+            BufferedReader bufferedReader = new BufferedReader(new FileReader("E://config.properties.txt"));//watchservice.properties
             properties.load(bufferedReader);
 
             //连接zookeeper
             zk = new ZkClient(properties.getProperty("zkClient"));
-
             //获取parentNode
             parentNode = properties.getProperty("parentNode");
 
-            // 获取key对应的value值
-            mailManager = new MailManager(
-                    properties.getProperty("host"),
-                    properties.getProperty("port"),
-                    properties.getProperty("auth"),
-                    properties.getProperty("userName"),
-                    properties.getProperty("domainUser"),
-                    properties.getProperty("passWord")
-            );
-
-            flumeMetricsMonitor = new FlumeMetricsMonitor(mailManager,formatter);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -82,10 +73,15 @@ public class ServiceNodeUpAndDown {
                 String nodePath = parentNode + "/" + node; //拿到node在zookeeper中的路径
                 String nodeName = nodes.get(node);
 
+
                 //获取zk中存储的数据
                 String zkData = zk.readData(nodePath).toString();
+                System.out.println("===================================================================");
+                System.out.println(zkData);
+                System.out.println("===================================================================");
+
                 JsonObject returnData = new JsonParser().parse(zkData).getAsJsonObject();
-                eventMap = gson.fromJson(returnData, ConcurrentHashMap.class);
+                eventMap = gson.fromJson(zkData, ConcurrentHashMap.class);
                 System.out.println(eventMap.toString());
                 receiver = eventMap.get("receiver");
                 currentHost = eventMap.get("currentHost");
@@ -96,14 +92,13 @@ public class ServiceNodeUpAndDown {
                 //存放到监控metrics用于获取数据的map
                 monitorMap.put(eventMap.get("confName"),eventMap);
 
-                //获取收件人
-                mailManager.setToReceiverAry(receiver.split(";"));
-
                 //与之前的存储集合比较
                 if (nodeName == null) {
+                    System.out.println(nodeName);
                     //发送邮通知新加入的节点为nodeName
                     if (first == 1) {
-                        mailManager.SendMail("[INFO][FLUME][BIG_DATA]"
+                        mailManager.setToReceiverAry(eventMap.get("receiver").split(";")).SendMail(
+                                "[INFO][FLUME][BIG_DATA]"
                                 , "<b>event</b>: 已存在flume节点" + "<br>" +
                                         "<b>process</b>:" + confName + "<br>" +
                                         "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
@@ -111,7 +106,8 @@ public class ServiceNodeUpAndDown {
                         );
                         nodes.put(node, zk.readData(nodePath).toString());
                     } else {
-                        mailManager.SendMail("[INFO][FLUME][BIG_DATA]",
+                        mailManager.setToReceiverAry(eventMap.get("receiver").split(";")).SendMail(
+                                "[INFO][FLUME][BIG_DATA]",
                                 "<b>event</b>:加入flume节点" + "<br>" +
                                         "<b>process</b>:" + confName + "<br>" +
                                         "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
@@ -159,7 +155,8 @@ public class ServiceNodeUpAndDown {
                     //获取zk中存储的数据
                     String[] conf = node.getValue().split(":");
                     //System.out.println("发送邮件通知宕机节点为 : " + node.getKey());
-                    mailManager.SendMail("[ERORR][FLUME][BIG_DATA]",
+                    mailManager.setToReceiverAry(eventMap.get("receiver").split(";")).SendMail(
+                            "[ERORR][FLUME][BIG_DATA]",
                             "<b>event</b>:flume进程异常退出<br>" +
                                     "<b>process</b>:" + confName + "<br>" +
                                     "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
@@ -182,6 +179,18 @@ public class ServiceNodeUpAndDown {
     }
 
     public static void main(String[] args) throws Exception {
+        // 获取key对应的value值
+        mailManager = new MailManager(
+                properties.getProperty("host"),
+                properties.getProperty("port"),
+                properties.getProperty("auth"),
+                properties.getProperty("userName"),
+                properties.getProperty("domainUser"),
+                properties.getProperty("passWord")
+        );
+
+        flumeMetricsMonitor = new FlumeMetricsMonitor(mailManager,formatter);
+
         ServiceNodeUpAndDown sud = new ServiceNodeUpAndDown();
         sud.serverNodeListener();
 

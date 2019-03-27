@@ -7,7 +7,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.I0Itec.zkclient.ZkClient;
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -50,6 +49,23 @@ public class FlumeMetricsMonitor{ //extends Thread
     private String line;
     private String NL;
     private String[] aliasArray;
+    //用于自定义检查各组件所需对象
+    private boolean flumeSourceStatus;
+    private boolean flumeChannelStatus;
+    private boolean flumeSinkStatus;
+    private String flumeSourceLastEventData;
+    private String flumeSourceCurrentEventData;
+    private String flumeChannelLastEventData;
+    private String flumeChannelCurrentEventData;
+    private String flumeSinkLastEventData;
+    private String flumeSinkCurrentEventData;
+    private String flumeSourceTitle;
+    private String flumeChannelTitle ;
+    private String flumeSinkTitle ;
+    private String flumeSourceEventClassic ;
+    private String flumeChannelEventClassic ;
+    private String flumeSinkEventClassic;
+
 
     public FlumeMetricsMonitor(MailManager mailManager, SimpleDateFormat formatter) {
         this.mailManager= mailManager;
@@ -86,8 +102,7 @@ public class FlumeMetricsMonitor{ //extends Thread
         //周期进行监控
         while(!Thread.currentThread().isInterrupted()){
             try {
-                System.out.println("----------------------------开始第"+(++monitorTime)+"次监控----------------------------");
-                System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
+                System.out.println("-------------------------开始第"+(++monitorTime)+"次监控-----------------------------");
 
                 for (String conf : monitorMap.keySet()) {
                     //循环过程中会移除网络异常的flume,對應monitorMap中的key
@@ -95,9 +110,7 @@ public class FlumeMetricsMonitor{ //extends Thread
                         break;
                     System.out.println("http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics");
                     System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
-
                     aliasArray = monitorMap.get(conf).get("moduleAlias").toString().split(",");
-
                     metricsMonitor(zk,parentNode,monitorMap,conf,aliasArray[0],aliasArray[1],aliasArray[2]);
                 }
 
@@ -107,17 +120,15 @@ public class FlumeMetricsMonitor{ //extends Thread
                     System.out.println("当前没有可监听的对象");
                 }
 
-                if(fisrtRun){
-                    System.out.println("---------------------------第"+ monitorTime +"次监控初始化完毕-----------------------");
-                }
-
+                if(fisrtRun)
+                    System.out.println("------------------------第"+ monitorTime +"次监控初始化完毕------------------------");
                 else
-                    System.out.println("--------------------第"+ monitorTime +"次运行监控，flume状态记录完毕-------------------");
+                    System.out.println("--------------------第"+ monitorTime +"次运行监控，flume状态记录完毕-----------------");
 
                 System.out.println();
                 System.out.println();
 
-                Thread.sleep(600000);//完成一周期的监控休眠600s
+                Thread.sleep(1200000);//完成一周期的监控休眠20min
                 fisrtRun = false;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -141,7 +152,9 @@ public class FlumeMetricsMonitor{ //extends Thread
 
         }catch (Exception excption){
            System.out.println(url+",网络连接异常");
-           mailManager.SendMail("[ERORR][FLUME][BIG_DATA]",
+
+            mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+                    "[ERORR][FLUME][BIG_DATA]",
                    "<b>event</b>:flume httpMonitor http网络连接异常<br>" +
                            "<b>url</b>: " + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
                            "<b>process</b>:" + conf + "<br>" +
@@ -158,7 +171,8 @@ public class FlumeMetricsMonitor{ //extends Thread
 
         //flume进程与网络端口断开快与zookeeper，这段时间会没有数据
         if(metricsMap ==null || metricsMap.isEmpty()) {
-            mailManager.SendMail("[ERORR][FLUME][BIG_DATA]",
+            mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+                    "[ERORR][FLUME][BIG_DATA]",
                     "<b>event</b>:flume进程关闭或所在服务器网络断开<br>" +
                             "<b>url</b>:" + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
                             "<b>process</b>:" + conf + "<br>" +
@@ -187,8 +201,19 @@ public class FlumeMetricsMonitor{ //extends Thread
             System.out.println("channel被异常关闭");
 
         //缓存通道占用百分比低于80%，可能会导致通道溢出，丢数据或者影响性能，需要增加通道容量或提升sink效率
-        if(flumeChannel != null && Double.parseDouble(flumeChannel.getChannelFillPercentage()) > 80)
-            System.out.println("通道占用百分比低于80%，可能会导致通道溢出，丢数据或者影响性能，需要增加通道容量或提升sink效率");
+        if(flumeChannel != null && Double.parseDouble(flumeChannel.getChannelFillPercentage()) > 80) {
+            mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+                    "[ERORR][FLUME][BIG_DATA]",
+                    "<b>event</b>:通道占用百分比低于80%，可能会导致通道溢出<br>" +
+                            "<b>url</b>:" + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
+                            "<b>ChannelCapacity</b>:" + flumeChannel.getChannelCapacity() + "<br>" +
+                            "<b>ChannelSize</b>:" + flumeChannel.getChannelSize() + "<br>" +
+                            "<b>ChannelFillPercentage</b>:" + flumeChannel.getChannelFillPercentage() + "<br>" +
+                            "<b>process</b>:" + conf + "<br>" +
+                            "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
+                            "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>");
+            System.out.println("通道占用百分比高于于80%，可能会导致通道溢出，丢数据或者影响性能，需要增加通道容量或提升sink效率");
+        }
 
 
         //============================sink===================================
@@ -204,37 +229,96 @@ public class FlumeMetricsMonitor{ //extends Thread
             System.out.println("sink连接失败");
 
         //sink批量写入是否有写入溢出
-        if (flumeSink!=null && Double.parseDouble(flumeSink.getBatchUnderflowCount()) > 0)
-            System.out.println("sink批量写入溢出，影响性能");
+        if (flumeSink!=null && Double.parseDouble(flumeSink.getBatchUnderflowCount()) > 0){
+            if (properties.getProperty(conf+".Sink.BatchUnderflowCount") ==null ||
+                    Double.parseDouble(flumeSink.getBatchUnderflowCount()) > Double.parseDouble(properties.getProperty(conf+".Sink.BatchUnderflowCount"))){
+               /* //发送邮件
+                mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+                                "[ERORR][FLUME][BIG_DATA]",
+                                "<b>event</b>:sink批量写入溢出<br>" +
+                                "<b>url</b>: " + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
+                                "<b>lastBatchUnderflowCount</b>:" +  properties.get(conf+".Sink.BatchUnderflowCount") + "<br>" +
+                                "<b>currentBatchUnderflowCount</b>:" + flumeSink.getBatchUnderflowCount() + "<br>" +
+                                "<b>process</b>:" + conf + "<br>" +
+                                "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
+                                "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>");
+                System.out.println("sink批量写入溢出，影响性能");*/
+
+                //修改配置文件中的值
+                System.out.println("--last "+conf+".Sink.BatchUnderflowCount" +" = "+ properties.get(conf+".Sink.BatchUnderflowCount"));
+                System.out.println("motify "+conf+".Sink.BatchUnderflowCount" +" = "+ flumeSink.getBatchUnderflowCount());
+
+                properties.load(bufferedReader);
+                properties.put(conf+".Sink.BatchUnderflowCount",flumeSink.getBatchUnderflowCount());
+                bufferedWriter = new BufferedWriter(new FileWriter(new File("").getCanonicalPath().toString()+"/src/main/resources/conf/metrics.properties"));//watchservice.properties
+                properties.store(bufferedWriter,"");
+            }
+        }
+
 
 
         //============================自定义指标==============================
         //用于监控source采集效率与发送到channel的效率
-        if ( flumeSource != null && Double.parseDouble(flumeSource.getEventAcceptedCount()) >= Double.parseDouble(flumeSource.getEventReceivedCount()) * 2)
+        if ( flumeSource != null && Double.parseDouble(flumeSource.getEventAcceptedCount()) > Double.parseDouble(flumeSource.getEventReceivedCount()) * 2)
             System.out.println("source采集效率高于source发送到channel");
 
         //用于监控channel的存储效率与sink的拉取效率
         if(flumeSink != null &&
-                Double.parseDouble(flumeChannel.getEventPutSuccessCount()) >= Double.parseDouble(flumeChannel.getEventTakeSuccessCount()) * 2)
+                Double.parseDouble(flumeChannel.getEventPutSuccessCount()) > Double.parseDouble(flumeChannel.getEventTakeSuccessCount()) * 2)
             System.out.println("chanel存储效率高于sink拉取速度");
 
         //用于监控source组件状态
-        if(flumeSource !=null) {
-            boolean flumeSourceStatus =checkModuleStatus(flumeSource.getEventReceivedCount(),conf+".Source.EventReceivedCount",monitorMap,conf);
+        if(flumeSource != null) {
+             flumeSourceLastEventData =  "<b>lastEventData</b>:" + properties.getProperty(conf+".Source.EventReceivedCount") + "<br>" ;
+
+             flumeSourceStatus =checkModuleStatus(flumeSource.getEventReceivedCount(),conf+".Source.EventReceivedCount",monitorMap,conf);
+
+             flumeSourceCurrentEventData =  "<b>currentEventData</b>:" + flumeSource.getEventReceivedCount() + "<br>" ;
         }
-
-
         //用于确认chanel的状态
         if(flumeChannel != null){
-            boolean flumeChannelStatus = checkModuleStatus(flumeChannel.getEventPutSuccessCount(),conf+".Channel.EventPutSuccessCount", monitorMap, conf);
+            flumeChannelLastEventData =  "<b>lastEventData</b>:" + properties.getProperty(conf+".Channel.EventPutSuccessCount") + "<br>" ;
+
+            flumeChannelStatus = checkModuleStatus(flumeChannel.getEventPutSuccessCount(),conf+".Channel.EventPutSuccessCount", monitorMap, conf);
+
+            flumeChannelCurrentEventData =  "<b>currentEventData</b>:" + flumeChannel.getEventPutSuccessCount() + "<br>" ;
         }
-
-
-        //监控sink的状态
+        //用于确认sink的状态
         if (flumeSink != null){
-            boolean flumeSinkStatus =checkModuleStatus(flumeSink.getEventDrainSuccessCount(),conf+".Sink.EventDrainSuccessCount", monitorMap, conf);
-        }
+            flumeSinkLastEventData =  "<b>lastEventData</b>:" + properties.getProperty(conf+".Sink.EventDrainSuccessCount") + "<br>" ;
 
+            flumeSinkStatus =checkModuleStatus(flumeSink.getEventDrainSuccessCount(),conf+".Sink.EventDrainSuccessCount", monitorMap, conf);
+
+            flumeSinkCurrentEventData =  "<b>currentEventData</b>:" + flumeSink.getEventDrainSuccessCount() + "<br>" ;
+        }
+        //根据checkStatus的结果是否发邮件以及邮件指标
+        if (!flumeSourceStatus || !flumeChannelStatus || !flumeSinkStatus){
+             flumeSourceTitle = flumeSourceStatus?null:"Source";
+             flumeChannelTitle = flumeChannelStatus?null:"Channel";
+             flumeSinkTitle = flumeSinkStatus?null:"Sink";
+
+             flumeSourceEventClassic = flumeSourceStatus?null:"<b>EventClassic</b>:" + conf+".Source.EventReceivedCount" + "<br>";
+             flumeChannelEventClassic = flumeChannelStatus?null:"<b>EventClassic</b>:" + conf+".Channel.EventPutSuccessCount" + "<br>";
+             flumeSinkEventClassic = flumeSinkStatus?null:"<b>EventClassic</b>:" + conf+".Sink.EventDrainSuccessCount" + "<br>";
+
+             mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+                    "[ERORR][FLUME][BIG_DATA]",
+                    "<b>event</b>: flume " +flumeSourceTitle+" "+flumeChannelTitle+" "+flumeSinkTitle+ " 没有数据<br>" +
+                            "<b>url</b>: " + "http://" + monitorMap.get(conf).get("currentHost") + ":" + monitorMap.get(conf).get("monitorPort") + "/metrics" + "<br>" +
+                            flumeSourceEventClassic +
+                            flumeSourceLastEventData +
+                            flumeSourceCurrentEventData +
+                            flumeChannelEventClassic +
+                            flumeChannelLastEventData +
+                            flumeChannelCurrentEventData +
+                            flumeSinkEventClassic +
+                            flumeChannelLastEventData +
+                            flumeSinkCurrentEventData +
+                            "<b>process</b>:" + conf + "<br>" +
+                            "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
+                            "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>");
+
+        }
     }
 
     //获取各组件的对象
@@ -301,17 +385,8 @@ public class FlumeMetricsMonitor{ //extends Thread
             lastEventDataCount= properties.getProperty(propConf);
             System.out.println("--last "+propConf+":"+lastEventDataCount);
 
-            if (!fisrtRun && eventCount .equals(lastEventDataCount) && properties.getProperty(propConf) != null) {
-                mailManager.SendMail("[ERORR][FLUME][BIG_DATA]",
-                        "<b>event</b>: flume " +propConf+ "数据异常<br>" +
-                                "<b>url</b>: " + "http://" + monitorMap.get(conf).get("currentHost") + ":" + monitorMap.get(conf).get("monitorPort") + "/metrics" + "<br>" +
-                                "<b>EventClassic</b>:" + propConf + "<br>" +
-                                "<b>lastEventData</b>:" + properties.getProperty(propConf) + "<br>" +
-                                "<b>currentEventData</b>:" + eventCount + "<br>" +
-                                "<b>process</b>:" + conf + "<br>" +
-                                "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
-                                "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>");
-                System.out.println("motify "+propConf +":"+ eventCount);
+            if (!fisrtRun && eventCount.equals(lastEventDataCount) && properties.getProperty(propConf) != null) {
+                System.out.println("current "+propConf +":"+ eventCount);
                 return false;
             }
 
@@ -333,7 +408,7 @@ public class FlumeMetricsMonitor{ //extends Thread
     public String get(String url) throws IOException {
         try {
             httpGet = new HttpGet(url);
-            //設置連接超時
+            //设置连接超时
             RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(50000).setConnectionRequestTimeout(50000).setSocketTimeout(30000).build();
             httpGet.setConfig(requestConfig);
             httpGet.setConfig(requestConfig);
