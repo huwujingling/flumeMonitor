@@ -1,6 +1,6 @@
 package com.csot.flume.domain;
 
-public class flumeSink{
+public class FlumeSink {
     private String ConnectionCreatedCount;
     private String ConnectionClosedCount;
     private String Type;
@@ -13,9 +13,9 @@ public class flumeSink{
     private String StopTime;
     private String ConnectionFailedCount;
 
-    public flumeSink(){}
+    public FlumeSink(){}
 
-    public flumeSink(String connectionCreatedCount, String connectionClosedCount, String type, String batchCompleteCount, String batchEmptyCount, String eventDrainAttemptCount, String startTime, String eventDrainSuccessCount, String batchUnderflowCount, String stopTime, String connectionFailedCount) {
+    public FlumeSink(String connectionCreatedCount, String connectionClosedCount, String type, String batchCompleteCount, String batchEmptyCount, String eventDrainAttemptCount, String startTime, String eventDrainSuccessCount, String batchUnderflowCount, String stopTime, String connectionFailedCount) {
         ConnectionCreatedCount = connectionCreatedCount;
         ConnectionClosedCount = connectionClosedCount;
         Type = type;
@@ -119,7 +119,7 @@ public class flumeSink{
 
     @Override
     public String toString() {
-        return "flumeSink{" +
+        return "FlumeSink{" +
                 "ConnectionCreatedCount='" + ConnectionCreatedCount + '\'' +
                 ", ConnectionClosedCount='" + ConnectionClosedCount + '\'' +
                 ", Type='" + Type + '\'' +

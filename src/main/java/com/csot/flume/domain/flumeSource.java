@@ -1,6 +1,6 @@
 package com.csot.flume.domain;
 
-public class flumeSource {
+public class FlumeSource {
     private String EventReceivedCount;
     private String AppendBatchAcceptedCount;
     private String Type;
@@ -12,7 +12,7 @@ public class flumeSource {
     private String AppendBatchReceivedCount;
     private String StopTime;
 
-    public flumeSource(String eventReceivedCount, String appendBatchAcceptedCount, String type, String eventAcceptedCount, String appendReceivedCount, String startTime, String appendAcceptedCount, String openConnectionCount, String appendBatchReceivedCount, String stopTime) {
+    public FlumeSource(String eventReceivedCount, String appendBatchAcceptedCount, String type, String eventAcceptedCount, String appendReceivedCount, String startTime, String appendAcceptedCount, String openConnectionCount, String appendBatchReceivedCount, String stopTime) {
         EventReceivedCount = eventReceivedCount;
         AppendBatchAcceptedCount = appendBatchAcceptedCount;
         Type = type;
@@ -105,12 +105,12 @@ public class flumeSource {
         StopTime = stopTime;
     }
 
-    public flumeSource() {
+    public FlumeSource() {
     }
 
     @Override
     public String toString() {
-        return "flumeSource{" +
+        return "FlumeSource{" +
                 "EventReceivedCount='" + EventReceivedCount + '\'' +
                 ", AppendBatchAcceptedCount='" + AppendBatchAcceptedCount + '\'' +
                 ", Type='" + Type + '\'' +

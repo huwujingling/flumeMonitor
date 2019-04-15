@@ -1,6 +1,6 @@
 package com.csot.flume.domain;
 
-public class flumeChannel {
+public class FlumeChannel {
     private String ChannelCapacity;
     private String ChannelFillPercentage;
     private String Type;
@@ -13,10 +13,10 @@ public class flumeChannel {
     private String Open;
     private String StopTime;
 
-    public flumeChannel() {
+    public FlumeChannel() {
     }
 
-    public flumeChannel(String channelCapacity, String channelFillPercentage, String type, String eventTakeSuccessCount, String channelSize, String eventTakeAttemptCount, String startTime, String eventPutAttemptCount, String eventPutSuccessCount, String open, String stopTime) {
+    public FlumeChannel(String channelCapacity, String channelFillPercentage, String type, String eventTakeSuccessCount, String channelSize, String eventTakeAttemptCount, String startTime, String eventPutAttemptCount, String eventPutSuccessCount, String open, String stopTime) {
         ChannelCapacity = channelCapacity;
         ChannelFillPercentage = channelFillPercentage;
         Type = type;
@@ -120,7 +120,7 @@ public class flumeChannel {
 
     @Override
     public String toString() {
-        return "flumeChannel{" +
+        return "FlumeChannel{" +
                 "ChannelCapacity='" + ChannelCapacity + '\'' +
                 ", ChannelFillPercentage='" + ChannelFillPercentage + '\'' +
                 ", Type='" + Type + '\'' +

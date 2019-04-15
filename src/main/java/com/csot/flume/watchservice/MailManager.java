@@ -1,5 +1,7 @@
 package com.csot.flume.watchservice;
 
+import org.apache.commons.lang.ArrayUtils;
+
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
@@ -61,8 +63,9 @@ public class MailManager {
     }
 
 
-    public void setToReceiverAry(String[] toReceiverAry) {
+    public MailManager setToReceiverAry(String[] toReceiverAry) {
         this.toReceiverAry = toReceiverAry;
+        return this;
     }
 
     /**
@@ -127,6 +130,14 @@ public class MailManager {
             transport.connect(host, from.toString().split("@")[0], password);
             //发送邮件
             transport.sendMessage(msg, msg.getAllRecipients());
+
+            System.out.println("==============================================================");
+            System.out.println("==============================================================");
+            System.out.println("hahahhahha");
+            System.out.println(ArrayUtils.toString(toAddr)+"\n" +subject+"\n"+msgtext);
+            System.out.println("==============================================================");
+            System.out.println("==============================================================");
+
             //关闭
             transport.close();
 

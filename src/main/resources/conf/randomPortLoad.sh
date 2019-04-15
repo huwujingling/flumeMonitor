@@ -37,6 +37,7 @@ done
 
 #给conf中的的拦截器配置中的monitorPort赋值
 a=`cat /$confPath |grep monitorPort`
+#需要自己修改b
 b="a1.sources.r1.interceptors.i1.monitorPort = "$rndPort
 echo "$b"
 
