@@ -13,6 +13,8 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+
+import javax.mail.MessagingException;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -69,13 +71,14 @@ public class FlumeMetricsMonitor{ //extends Thread
     private String sourceAlias = "";
     private String sinkAlias = "";
     private String channelAlias = "";
-    private Map cycleMap ;//用来记录各监控对象的监控周期
-    private boolean cycleMonitorExists;//记录周期内是否存在监控对象
+    //private Map cycleMap ;//用来记录各监控对象的监控周期
+    private  boolean cycleMonitorExists;//记录周期内是否存在监控对象
 
     public FlumeMetricsMonitor(MailManager mailManager, SimpleDateFormat formatter) {
         this.mailManager= mailManager;
         this.formatter = formatter;
         this.fisrtRun = true;
+        this.cycleMonitorExists = false;
     }
 
     static {
@@ -95,7 +98,7 @@ public class FlumeMetricsMonitor{ //extends Thread
         }
     }
 
-    public void run(ZkClient zk, String parentNode, Map<String,Map> monitorMap,int watchCycle){
+    public void run(ZkClient zk, String parentNode, Map<String,Map> monitorMap,ConcurrentHashMap<String,Integer> cycleMap,int watchCycle){
         //新启服务清空之前的内容
         try {
             properties.load(bufferedReader);
@@ -104,45 +107,44 @@ public class FlumeMetricsMonitor{ //extends Thread
             e.printStackTrace();
         }
 
-        cycleMap = new ConcurrentHashMap<String,Integer>();
 
         //周期进行监控
         while(!Thread.currentThread().isInterrupted()){
+            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");//设置日期格式
+            System.out.println(df.format(new Date()));// new Date()为获取当前系统时间
+
             try {
                 System.out.println("-------------------------开始第"+(++monitorTime)+"次监控-----------------------------");
 
-                cycleMonitorExists = false;
 
                 for (String conf : monitorMap.keySet()) {
 
                     //循环过程中会移除网络异常的flume,對應monitorMap中的key
-                    if(monitorMap == null || monitorMap.isEmpty())
+                    if(monitorMap == null || monitorMap.isEmpty()){
+                        cycleMonitorExists = false;
                         break;
-                    System.out.println("cycleMap: "+cycleMap);
+                    }
+
 
                     //flumeWatchCycle = -1 则不监控
-                    if (Integer.parseInt(monitorMap.get(conf).get("flumeWatchCycle").toString()) < 0)
+                    if (Integer.parseInt(monitorMap.get(conf).get("flumeWatchCycle").toString()) < 0){
+                        monitorMap.remove(conf);
                         continue;
+                    }
 
                     //判断是否新加入
                     if (monitorMap.get(conf).get("initialization") == "true"){
-                        cycleMap.put(conf,0);
                         monitorMap.get(conf).put("initialization","false");
                     }
 
-                    //获取并记录监控周期
-                    if (!cycleMap.containsKey(conf)){
-                        cycleMap.put(conf,0);
-                    }
-
-                    System.out.println("Integer.parseInt(cycleMap.get("+conf+").toString()) :"+Integer.parseInt(cycleMap.get(conf).toString()));
+                    System.out.println("--Integer.parseInt(cycleMap.get("+conf+").toString()) :"+Integer.parseInt(cycleMap.get(conf).toString()));
                     System.out.println("Integer.parseInt(monitorMap.get("+conf+").get(\"flumeWatchCycle\").toString():"+Integer.parseInt(monitorMap.get(conf).get("flumeWatchCycle").toString()));
 
                     //到达预定周期才开始监控
                     if(Integer.parseInt(cycleMap.get(conf).toString()) % Integer.parseInt(monitorMap.get(conf).get("flumeWatchCycle").toString())  == 0){
                         System.out.println("http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics");
                         System.out.println("Thread.name:"+Thread.currentThread().getName()+"-----Thread.id:"+Thread.currentThread().getId());
-                        metricsMonitor(zk,parentNode,monitorMap,conf);
+                        metricsMonitor(zk,parentNode,monitorMap,cycleMap,conf);
                         cycleMap.put(conf,0);
                         cycleMonitorExists = true;
                     }
@@ -150,10 +152,12 @@ public class FlumeMetricsMonitor{ //extends Thread
                     cycleMap.put(conf,Integer.parseInt(cycleMap.get(conf).toString()) + watchCycle);
                 }
 
+                System.out.println("cycleMap: "+cycleMap);
+
                 //flume下线会重新此方法，可能会为空
                 if(monitorMap == null || monitorMap.isEmpty() || cycleMonitorExists == false){
                     //如果启动多线程在此关闭线程
-                    System.out.println("当前没有可监听的对象");
+                    System.out.println("当前没有可监听的对象aaa");
                 }
 
                 if(fisrtRun)
@@ -173,55 +177,16 @@ public class FlumeMetricsMonitor{ //extends Thread
         }
     }
 
-    public void metricsMonitor(ZkClient zk,String parentNode, Map<String,Map> monitorMap, String conf) throws Exception {
+    //核心方法
+    public void metricsMonitor(ZkClient zk,String parentNode, Map<String,Map> monitorMap,ConcurrentHashMap<String,Integer> cycleMap, String conf) throws Exception {
         //使用get访问http获取metrics
         String url ="http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics";
 
         metricsMap = new ConcurrentHashMap<String,String>();
 
-        //int tryTime=0;//网络异常重试次数
-        //判断网络连接每5s重试一次，超过2次则抛异常
-        try{
-            String metrics = get(url);
-            returnData = new JsonParser().parse(metrics).getAsJsonObject();
-            metricsMap = gson.fromJson(returnData, Map.class);
-
-            System.out.println("================================================");
-            System.out.println("================================================");
-            System.out.println("aaaaaaaaaaaaa");
-            System.out.println(metricsMap.toString());
-
-            for (Object metricsKey : metricsMap.keySet()) {
-                System.out.println(metricsKey);
-                if(metricsKey != null && metricsKey != "" && metricsKey.toString().contains("SOURCE"))
-                    sourceAlias=metricsKey.toString();
-                if(metricsKey != null && metricsKey != "" && metricsKey.toString().contains("SINK"))
-                    sinkAlias=metricsKey.toString();
-                if(metricsKey != null && metricsKey != "" && metricsKey.toString().contains("CHANNEL"))
-                    channelAlias=metricsKey.toString();
-            }
-
-            System.out.println("sourceAlias: "+sourceAlias);
-            System.out.println("sinkAlias: "+sinkAlias);
-            System.out.println("channelAlias: "+channelAlias);
-            System.out.println("================================================");
-            System.out.println("================================================");
-        }catch (Exception excption){
-           System.out.println(url+",网络连接异常");
-
-            mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
-                    "[ERORR][FLUME][BIG_DATA]",
-                   "<b>event</b>:flume httpMonitor http网络连接异常<br>" +
-                           "<b>url</b>: " + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
-                           "<b>process</b>:" + conf + "<br>" +
-                           "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>" +
-                           "<b>time</b>:" + formatter.format(new Date()) + "<br>" );
-           System.out.println(conf+"被删除,可能是该节点被删除或服务器连接不通");
-           monitorMap.remove(conf);
-           cycleMap.remove(conf);
-           return;
-        }
-
+        //检查url连接状态
+        if (checkURLStatus(monitorMap, cycleMap, conf, url))
+            return;
 
         System.out.println("网络连接正常");
         System.out.println("开始执行监控指标判断");
@@ -252,6 +217,18 @@ public class FlumeMetricsMonitor{ //extends Thread
         if(flumeSource != null && Double.parseDouble(flumeSource.getStopTime()) > 0)
             System.out.println("目标源被异常关闭");
 
+        //检查channel的状态
+        checkChannelStatus(monitorMap, conf);
+
+        //检查sink的状态
+        checkSinkStaus(conf);
+
+        //检查自定义的指标
+        checkDefineItem(monitorMap, conf);
+
+    }
+
+    private void checkChannelStatus(Map<String, Map> monitorMap, String conf) throws MessagingException, UnsupportedEncodingException {
         //============================channel================================
         //用于监控channel的存活状态
         if (flumeChannel != null && Double.parseDouble(flumeChannel.getStopTime()) > 0)
@@ -272,7 +249,9 @@ public class FlumeMetricsMonitor{ //extends Thread
                             "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>");
             System.out.println("channel通道占用百分比高于于80%，可能会导致通道溢出，丢数据或者影响性能，需要增加通道容量或提升sink效率");
         }
+    }
 
+    private void checkSinkStaus(String conf) throws IOException {
         //============================sink===================================
         //用于确认sink的存活状态
         if (flumeSink !=null && Double.parseDouble(flumeSink.getStopTime()) > 0)
@@ -314,13 +293,13 @@ public class FlumeMetricsMonitor{ //extends Thread
                 } catch (IOException e) {
                     e.printStackTrace();
                 }finally {
-                    bufferedReader.
-                    bufferedWriter.flush();
                     bufferedWriter.close();
                 }
             }
         }
+    }
 
+    private void checkDefineItem(Map<String, Map> monitorMap, String conf) throws MessagingException, UnsupportedEncodingException {
         //============================自定义指标==============================
         //用于监控source采集效率与发送到channel的效率
         if ( flumeSource != null && Double.parseDouble(flumeSource.getEventAcceptedCount()) > Double.parseDouble(flumeSource.getEventReceivedCount()) * 2)
@@ -382,6 +361,58 @@ public class FlumeMetricsMonitor{ //extends Thread
                             "<b>time</b>:" + formatter.format(new Date()) + "<br>" +
                             "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>");
         }
+    }
+
+    private boolean checkURLStatus(Map<String, Map> monitorMap, ConcurrentHashMap<String, Integer> cycleMap, String conf, String url) throws MessagingException, UnsupportedEncodingException {
+        //int tryTime=0;//网络异常重试次数
+        //判断网络连接每5s重试一次，超过2次则抛异常
+        String subject ="flume httpMonitor http网络连接异常";
+
+        try{
+            String metrics = getResult(url);
+            returnData = new JsonParser().parse(metrics).getAsJsonObject();
+            metricsMap = gson.fromJson(returnData, Map.class);
+
+            System.out.println("================================================");
+            System.out.println("================================================");
+            System.out.println(metricsMap.toString());
+
+            for (Object metricsKey : metricsMap.keySet()) {
+                try {
+                    System.out.println(metricsKey);
+                    if(metricsKey != null && metricsKey != "" && metricsKey.toString().contains("SOURCE"))
+                        sourceAlias=metricsKey.toString();
+                    if(metricsKey != null && metricsKey != "" && metricsKey.toString().contains("SINK"))
+                        sinkAlias=metricsKey.toString();
+                    if(metricsKey != null && metricsKey != "" && metricsKey.toString().contains("CHANNEL"))
+                        channelAlias=metricsKey.toString();
+                } catch (Exception e) {
+                    subject="获取source,sink，channel的别名失败";
+                }
+            }
+            System.out.println("================================================");
+            System.out.println("================================================");
+        }catch (Exception excption){
+           System.out.println(url+subject);
+
+           mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+                    "[ERORR][FLUME][BIG_DATA]",
+                   "<b>event</b>:"+subject+"<br>" +
+                           "<b>url</b>: " + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
+                           "<b>process</b>:" + conf + "<br>" +
+                           "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>" +
+                           "<b>time</b>:" + formatter.format(new Date()) + "<br>" );
+           System.out.println(conf+"被删除,可能是该节点被删除或服务器连接不通");
+
+           if (monitorMap.containsKey(conf))
+                monitorMap.remove(conf);
+
+           if (cycleMap.containsKey(conf))
+                cycleMap.remove(conf);
+
+           return true;
+        }
+        return false;
     }
 
     //获取各组件的对象
@@ -464,7 +495,6 @@ public class FlumeMetricsMonitor{ //extends Thread
             e.printStackTrace();
         }finally {
             try {
-                bufferedWriter.flush();
                 bufferedWriter.close();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -474,7 +504,7 @@ public class FlumeMetricsMonitor{ //extends Thread
     }
 
     //使用get请求获取数据
-    public String get(String url) throws IOException {
+    public String getResult(String url) throws IOException {
         try {
             httpGet = new HttpGet(url);
             //设置连接超时
