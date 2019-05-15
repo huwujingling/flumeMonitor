@@ -1,4 +1,4 @@
-package com.csot.flume.domain;
+package com.monitor.flume.domain;
 
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;

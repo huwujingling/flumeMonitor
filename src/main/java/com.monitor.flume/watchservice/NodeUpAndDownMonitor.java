@@ -1,4 +1,4 @@
-package com.csot.flume.watchservice;
+package com.monitor.flume.watchservice;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

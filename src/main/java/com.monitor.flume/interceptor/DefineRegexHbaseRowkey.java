@@ -1,4 +1,4 @@
-package com.csot.flume.interceptor;
+package com.monitor.flume.interceptor;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -9,7 +9,6 @@ import org.apache.flume.Context;
 import org.apache.flume.Event;
 import org.apache.flume.interceptor.Interceptor;
 import org.apache.zookeeper.CreateMode;
-
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;

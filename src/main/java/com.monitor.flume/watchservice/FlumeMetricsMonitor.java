@@ -1,4 +1,4 @@
-package com.csot.flume.watchservice;
+package com.monitor.flume.watchservice;
 
 import com.csot.flume.domain.FlumeChannel;
 import com.csot.flume.domain.FlumeSink;
@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 //此类用于向flume发送http请求，获取metrics
 public class FlumeMetricsMonitor{ //extends Thread
-    private static CloseableHttpClient httpClient;
     static Gson gson = new Gson();
     private static  int monitorTime  ;//监控次数
     private Map metricsMap;
@@ -43,6 +42,7 @@ public class FlumeMetricsMonitor{ //extends Thread
     private  BufferedWriter bufferedWriter;
     private Properties properties = new Properties();
     //http所需对象
+    private static CloseableHttpClient httpClient;
     private CloseableHttpResponse response ;
     private BufferedReader in;
     private String result;//http响应结果
@@ -107,10 +107,10 @@ public class FlumeMetricsMonitor{ //extends Thread
             e.printStackTrace();
         }
 
-
+        SimpleDateFormat df =null;
         //周期进行监控
         while(!Thread.currentThread().isInterrupted()){
-            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");//设置日期格式
+            df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");//设置日期格式
             System.out.println(df.format(new Date()));// new Date()为获取当前系统时间
 
             try {
@@ -205,9 +205,9 @@ public class FlumeMetricsMonitor{ //extends Thread
         }
 
         //获取各组件对象
-         flumeSink = getModule(metricsMap,sinkAlias,sourceAlias,sinkAlias,channelAlias)==null?null:(FlumeSink) getModule(metricsMap,sinkAlias,sourceAlias,sinkAlias,channelAlias);
-         flumeChannel = getModule(metricsMap,channelAlias,sourceAlias,sinkAlias,channelAlias)==null?null:(FlumeChannel) getModule(metricsMap,channelAlias,sourceAlias,sinkAlias,channelAlias);
-         flumeSource = getModule(metricsMap,sourceAlias,sourceAlias,sinkAlias,channelAlias)==null?null:(FlumeSource) getModule(metricsMap,sourceAlias,sourceAlias,sinkAlias,channelAlias);
+        flumeSink = getModule(metricsMap,sinkAlias,sourceAlias,sinkAlias,channelAlias)==null?null:(FlumeSink) getModule(metricsMap,sinkAlias,sourceAlias,sinkAlias,channelAlias);
+        flumeChannel = getModule(metricsMap,channelAlias,sourceAlias,sinkAlias,channelAlias)==null?null:(FlumeChannel) getModule(metricsMap,channelAlias,sourceAlias,sinkAlias,channelAlias);
+        flumeSource = getModule(metricsMap,sourceAlias,sourceAlias,sinkAlias,channelAlias)==null?null:(FlumeSource) getModule(metricsMap,sourceAlias,sourceAlias,sinkAlias,channelAlias);
 
         //通过指标判断各组件存活状态
         //比如下沉到habse的表被disable
@@ -312,11 +312,11 @@ public class FlumeMetricsMonitor{ //extends Thread
 
         //用于监控source组件状态
         if(flumeSource != null) {
-             flumeSourceLastEventData =  "<b>lastEventData</b>:" + properties.getProperty(conf+".Source.EventReceivedCount") + "<br>" ;
+            flumeSourceLastEventData =  "<b>lastEventData</b>:" + properties.getProperty(conf+".Source.EventReceivedCount") + "<br>" ;
 
-             flumeSourceStatus =checkModuleStatus(flumeSource.getEventReceivedCount(),conf+".Source.EventReceivedCount",monitorMap,conf);
+            flumeSourceStatus =checkModuleStatus(flumeSource.getEventReceivedCount(),conf+".Source.EventReceivedCount",monitorMap,conf);
 
-             flumeSourceCurrentEventData =  "<b>currentEventData</b>:" + flumeSource.getEventReceivedCount() + "<br>" ;
+            flumeSourceCurrentEventData =  "<b>currentEventData</b>:" + flumeSource.getEventReceivedCount() + "<br>" ;
         }
         //用于确认chanel的状态
         if(flumeChannel != null){
@@ -336,15 +336,15 @@ public class FlumeMetricsMonitor{ //extends Thread
         }
         //根据checkStatus的结果是否发邮件以及邮件指标
         if (!flumeSourceStatus || !flumeChannelStatus || !flumeSinkStatus){
-             flumeSourceTitle = flumeSourceStatus?"":"Source";
-             flumeChannelTitle = flumeChannelStatus?"":"Channel";
-             flumeSinkTitle = flumeSinkStatus?"":"Sink";
+            flumeSourceTitle = flumeSourceStatus?"":"Source";
+            flumeChannelTitle = flumeChannelStatus?"":"Channel";
+            flumeSinkTitle = flumeSinkStatus?"":"Sink";
 
-             flumeSourceEventClassic = flumeSourceStatus?"":"<b>EventType</b>:" + conf+".Source.EventReceivedCount" + "<br>";
-             flumeChannelEventClassic = flumeChannelStatus?"":"<b>EventType</b>:" + conf+".Channel.EventPutSuccessCount" + "<br>";
-             flumeSinkEventClassic = flumeSinkStatus?"":"<b>EventType</b>:" + conf+".Sink.EventDrainSuccessCount" + "<br>";
+            flumeSourceEventClassic = flumeSourceStatus?"":"<b>EventType</b>:" + conf+".Source.EventReceivedCount" + "<br>";
+            flumeChannelEventClassic = flumeChannelStatus?"":"<b>EventType</b>:" + conf+".Channel.EventPutSuccessCount" + "<br>";
+            flumeSinkEventClassic = flumeSinkStatus?"":"<b>EventType</b>:" + conf+".Sink.EventDrainSuccessCount" + "<br>";
 
-             mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+            mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
                     "[ERORR][FLUME][BIG_DATA]",
                     "<b>event</b>: flume " +flumeSourceTitle+" "+flumeChannelTitle+" "+flumeSinkTitle+ " 没有数据<br>" +
                             "<b>url</b>: " + "http://" + monitorMap.get(conf).get("currentHost") + ":" + monitorMap.get(conf).get("monitorPort") + "/metrics" + "<br>" +
@@ -393,24 +393,24 @@ public class FlumeMetricsMonitor{ //extends Thread
             System.out.println("================================================");
             System.out.println("================================================");
         }catch (Exception excption){
-           System.out.println(url+subject);
+            System.out.println(url+subject);
 
-           mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
+            mailManager.setToReceiverAry(monitorMap.get(conf).get("receiver").toString().split(";")).SendMail(
                     "[ERORR][FLUME][BIG_DATA]",
-                   "<b>event</b>:"+subject+"<br>" +
-                           "<b>url</b>: " + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
-                           "<b>process</b>:" + conf + "<br>" +
-                           "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>" +
-                           "<b>time</b>:" + formatter.format(new Date()) + "<br>" );
-           System.out.println(conf+"被删除,可能是该节点被删除或服务器连接不通");
+                    "<b>event</b>:"+subject+"<br>" +
+                            "<b>url</b>: " + "http://"+monitorMap.get(conf).get("currentHost")+":"+monitorMap.get(conf).get("monitorPort")+"/metrics" + "<br>" +
+                            "<b>process</b>:" + conf + "<br>" +
+                            "<b>server</b>:" + monitorMap.get(conf).get("currentHost") + "<br>" +
+                            "<b>time</b>:" + formatter.format(new Date()) + "<br>" );
+            System.out.println(conf+"被删除,可能是该节点被删除或服务器连接不通");
 
-           if (monitorMap.containsKey(conf))
+            if (monitorMap.containsKey(conf))
                 monitorMap.remove(conf);
 
-           if (cycleMap.containsKey(conf))
+            if (cycleMap.containsKey(conf))
                 cycleMap.remove(conf);
 
-           return true;
+            return true;
         }
         return false;
     }
@@ -524,7 +524,7 @@ public class FlumeMetricsMonitor{ //extends Thread
             in.close();
             result = sb.toString();
         } catch (IOException e) {
-           throw e;
+            throw e;
         } finally {
             try {
                 if (null != response) {

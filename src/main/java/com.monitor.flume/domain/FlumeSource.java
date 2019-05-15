@@ -1,4 +1,4 @@
-package com.csot.flume.domain;
+package com.monitor.flume.domain;
 
 public class FlumeSource {
     private String EventReceivedCount;

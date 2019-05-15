@@ -1,7 +1,6 @@
-package com.csot.flume.watchservice;
+package com.monitor.flume.watchservice;
 
 import org.I0Itec.zkclient.ZkClient;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;

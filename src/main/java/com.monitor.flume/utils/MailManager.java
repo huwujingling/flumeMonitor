@@ -1,4 +1,4 @@
-package com.csot.flume.watchservice;
+package com.csot.flume.utils;
 
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
@@ -61,8 +61,9 @@ public class MailManager {
     }
 
 
-    public void setToReceiverAry(String[] toReceiverAry) {
+    public MailManager setToReceiverAry(String[] toReceiverAry) {
         this.toReceiverAry = toReceiverAry;
+        return this;
     }
 
     /**
